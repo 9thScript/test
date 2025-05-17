@@ -17,23 +17,33 @@ def home():
 
 @app.route('/forecast', methods=['GET'])
 def forecast():
-    # Forecast for the next 12 months (you can adjust this)
-    future = model.make_future_dataframe(periods=12, freq='MS')  # Month Start
+    # Forecast for the next 12 months
+    future = model.make_future_dataframe(periods=12, freq='MS')
     forecast = model.predict(future)
 
-    # Resample monthly forecast
+    # Resample monthly forecast (mean aggregation)
     forecast_monthly = forecast.resample('MS', on='ds').mean().reset_index()
 
-    # Merge forecast with actual observed data on 'ds'
-    merged = pd.merge(forecast_monthly, df[['ds', 'y']], on='ds', how='left')
+    # Prepare actual values aligned by 'ds' date from original df
+    # We'll merge the actual 'y' from df with forecast_monthly by 'ds'
+    actuals = df[['ds', 'y']].copy()
+    actuals['ds'] = pd.to_datetime(actuals['ds'])
+    actuals_monthly = actuals.resample('MS', on='ds').mean().reset_index()
 
-    # Prepare data for JSON response
-    merged['ds'] = merged['ds'].astype(str)  # Convert datetime to string for JSON
+    # Merge forecast and actual data on 'ds'
+    result = pd.merge(forecast_monthly, actuals_monthly, on='ds', how='left')
 
-    # Select columns including actual 'y'
-    response = merged[['ds', 'y', 'yhat', 'yhat_lower', 'yhat_upper']]
+    # Replace NaN in 'y' with None for JSON serialization
+    result['y'] = result['y'].apply(lambda x: None if pd.isna(x) else x)
+
+    # Convert 'ds' to string for JSON
+    result['ds'] = result['ds'].astype(str)
+
+    # Select columns to send
+    response = result[['ds', 'yhat', 'yhat_lower', 'yhat_upper', 'y']]
 
     return jsonify(response.to_dict(orient='records'))
+
 
 @app.route('/plot', methods=['GET'])
 def plot():
