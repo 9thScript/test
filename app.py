@@ -24,9 +24,15 @@ def forecast():
     # Resample monthly forecast
     forecast_monthly = forecast.resample('MS', on='ds').mean().reset_index()
 
+    # Merge forecast with actual observed data on 'ds'
+    merged = pd.merge(forecast_monthly, df[['ds', 'y']], on='ds', how='left')
+
     # Prepare data for JSON response
-    response = forecast_monthly[['ds', 'yhat', 'yhat_lower', 'yhat_upper']]
-    response['ds'] = response['ds'].astype(str)  # Convert to string for JSON
+    merged['ds'] = merged['ds'].astype(str)  # Convert datetime to string for JSON
+
+    # Select columns including actual 'y'
+    response = merged[['ds', 'y', 'yhat', 'yhat_lower', 'yhat_upper']]
+
     return jsonify(response.to_dict(orient='records'))
 
 @app.route('/plot', methods=['GET'])
