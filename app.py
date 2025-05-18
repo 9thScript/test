@@ -1,35 +1,28 @@
-from flask import Flask, jsonify, request
+from flask import Flask, request, jsonify
 import pandas as pd
-from model import generate_forecast  # your function from model.py
+from model import generate_forecast  # The function from Step 1
+import json
 
 app = Flask(__name__)
 
-# Load raw data once globally
-df = pd.read_csv('ph_dengue_cases2016-2020.csv')  # use your full dataset here
+# Load the dataset once
+df = pd.read_csv('ph_dengue_cases2016-2020.csv') 
 
-@app.route('/')
-def home():
-    return "<h2>Dengue Forecast API</h2><p>Use endpoint <code>/forecast?region=NCR&months=12</code></p>"
-
-@app.route('/forecast', methods=['GET'])
+@app.route('/forecast', methods=['POST'])
 def forecast():
-    region = request.args.get('region')
-    months = request.args.get('months', default=12, type=int)
+    data = request.get_json()
+    region = data.get('region')
+    months = int(data.get('months', 12))
 
-    if not region:
-        return jsonify({'error': 'Please provide a region using ?region=YourRegion'}), 400
+    if region is None or months <= 0:
+        return jsonify({'error': 'Invalid region or months'}), 400
 
-    # Filter data and forecast
     try:
-        forecast_df = generate_forecast(df, region, months)
+        result = generate_forecast(df, region, months)
+        # Format the output nicely
+        result['ds'] = result['ds'].dt.strftime('%Y-%m-%d')
+        result_json = result.to_dict(orient='records')
+        return jsonify(result_json)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-    # Format for JSON
-    forecast_df['ds'] = forecast_df['ds'].astype(str)
-
-    response = forecast_df[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].to_dict(orient='records')
-    return jsonify(response)
-
-if __name__ == '__main__':
-    app.run(debug=True)
